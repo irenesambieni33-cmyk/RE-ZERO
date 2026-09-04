@@ -3,7 +3,7 @@
 from __future__ import annotations
 from typing import Dict, Optional
 import math
-from config import MAX_OPEN_RISK, MIN_RR, RISK_PER_TRADE, TP2_RR
+from config import MAX_OPEN_RISK, MIN_RR, RISK_PER_TRADE, TP2_RR, MAX_TRADES_PER_DAY
 
 
 def build_setup(price: float, atr: Optional[float], structure: Dict, direction: str, zones: Dict) -> Dict:
@@ -70,7 +70,7 @@ def build_step_up(setup: Dict) -> Dict:
         {"name": "STEP 0", "trigger": entry, "trigger_text": "entrée déclenchée",
          "sl": sl, "action": "Conserver le SL initial et risquer au maximum 1R."},
         {"name": "STEP 1", "trigger": one_r, "trigger_text": "+1R",
-         "sl": entry, "action": "Si la structure M15 reste valide, déplacer théoriquement le SL à break-even."},
+         "sl": entry, "action": "Si la structure du timeframe d'exécution reste valide, déplacer théoriquement le SL à break-even."},
         {"name": "STEP 2", "trigger": max(tp1, two_r) if direction == "ACHAT" else min(tp1, two_r), "trigger_text": "+2R / TP1",
          "sl": entry + sign * risk_distance, "action": "Protéger au moins +1R et laisser courir vers TP2 si la structure le permet."},
         {"name": "STEP 3", "trigger": tp2, "trigger_text": "+3R / TP2",
@@ -93,3 +93,8 @@ def risk_summary(capital: float, entry: float, sl: float) -> Dict:
     return {**sizing, "max_open_risk_amount": capital*MAX_OPEN_RISK, "risk_fraction": RISK_PER_TRADE,
             "max_open_risk_fraction": MAX_OPEN_RISK, "theoretical_loss": sizing["risk_amount"],
             "note": "Taille en unités théoriques de prix. Le lot broker réel dépend du contrat et de la valeur du point. Aucun ordre n'est envoyé."}
+
+
+def trade_limit_status(trades_today: int) -> Dict:
+    trades_today=max(0,int(trades_today))
+    return {"trades_today":trades_today,"max_trades":MAX_TRADES_PER_DAY,"remaining":max(0,MAX_TRADES_PER_DAY-trades_today),"allowed":trades_today<MAX_TRADES_PER_DAY}

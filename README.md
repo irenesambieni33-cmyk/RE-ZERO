@@ -60,3 +60,15 @@ Le projet est désormais centré exclusivement sur BTC/USD. Le moteur recherche 
 
 ## RE-ZERO Intelligence Core
 Cette version ajoute un détecteur de régime de marché, un audit de qualité des données, une décision hiérarchique qui traite la direction comme un scénario conditionnel et un moteur de validation statistique avec walk-forward, bootstrap, permutation et diagnostics par régime. Les métriques servent à détecter la fragilité et le surajustement, pas à garantir des gains.
+
+## RE-ZERO dynamic timeframe release
+- Execution timeframe: M5, M15, M30, H1, H4 or D1.
+- The selected timeframe is preserved and drives a relative context/structure/setup/trigger policy.
+- Liquidity is a first-class gate: visible pools, recent highs/lows, sweep, reclaim and displacement inference.
+- Risk rules: R:R >= 1:2 and maximum 3 trades opened per day.
+- Session controller displays active/closed state, remaining time and daily allowance.
+- Browser notifications are permission-gated; Telegram can be enabled with `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` secrets.
+- No broker order execution is enabled.
+
+### Notification reality check
+Browser notifications require HTTPS and permission. The Streamlit browser bridge can notify while the app is active. Reliable background push when the page is closed requires a real Web Push service worker/VAPID backend or an external channel such as Telegram. RE-ZERO does not pretend a JavaScript alert is a magic background push service.

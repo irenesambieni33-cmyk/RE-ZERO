@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict
 from typing import Dict, Any, List, Optional
 import time
+from datetime import datetime, timezone
 from performance import summarize_trades
 
 @dataclass
@@ -35,12 +36,21 @@ class TradeManager:
         self.history: List[ManagedTrade] = []
         self.last_event: str = ""
 
+    def trades_today(self) -> int:
+        today = datetime.now(timezone.utc).date()
+        n = sum(1 for t in self.history if datetime.fromtimestamp(t.opened_at, timezone.utc).date() == today)
+        if self.active is not None and datetime.fromtimestamp(self.active.opened_at, timezone.utc).date() == today:
+            n += 1
+        return n
+
     def can_open(self) -> bool:
-        return self.active is None
+        return self.active is None and self.trades_today() < 3
 
     def open(self, symbol: str, setup: Dict[str, Any], units: float, quality: Dict[str, Any], liquidity_note: str = "") -> Dict[str, Any]:
         if self.active is not None:
             return {"ok": False, "reason": "Une position est déjà active. Aucun nouveau trade n'est autorisé."}
+        if self.trades_today() >= 3:
+            return {"ok": False, "reason": "Limite quotidienne de 3 trades atteinte."}
         if symbol not in {"BTC/USD", "EUR/USD", "XAU/USD"}:
             return {"ok": False, "reason": "Instrument non supporté."}
         if not setup or not setup.get("valid") or units <= 0 or not quality.get("approved"):

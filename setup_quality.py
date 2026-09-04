@@ -12,8 +12,10 @@ def evaluate_setup_quality(result: Dict[str, Any], setup: Dict[str, Any] | None,
     if not setup or not setup.get("valid"):
         return {"approved":False,"score":0.0,"grade":"REJETÉ","reasons":["Setup technique invalide."],"families":{}}
     direction=setup.get("direction"); frames=result.get("timeframes",{}); signs={"ACHAT":1,"VENTE":-1}; target=signs.get(direction,0)
+    exec_tf=result.get("execution_timeframe", "M15")
+    policy=result.get("policy", {}) or {}
     families={}; reasons=[]
-    weights={"D1":3,"H4":3,"H1":2,"M15":1,"M5":1}; points=maxp=0.0
+    weights={tf:w for tf,w in {"D1":3,"H4":3,"H1":2,"M30":1.5,"M15":1,"M5":1}.items() if tf in frames}; points=maxp=0.0
     for tf,w in weights.items():
         r=frames.get(tf,{})
         if not r.get("available"): continue
@@ -21,7 +23,7 @@ def evaluate_setup_quality(result: Dict[str, Any], setup: Dict[str, Any] | None,
     families["tendance_MTF"]=_clip(20*points/maxp,0,20) if maxp else 0
 
     structure=0.0
-    for tf,w in (("H4",2),("H1",2),("M15",3),("M5",1)):
+    for tf,w in zip(policy.get("structure", ("H1","M30")), (3,2)):
         r=frames.get(tf,{})
         if not r.get("available"): continue
         sd=r.get("structure_data",{}) or {}; sdir=signs.get(r.get("direction"),0)
@@ -31,7 +33,7 @@ def evaluate_setup_quality(result: Dict[str, Any], setup: Dict[str, Any] | None,
         if target<0 and any("BAISSIER" in x for x in events): structure+=0.5
     families["structure_price_action"]=_clip(structure/7.5*20,0,20)
 
-    m15=frames.get("M15",{}); breakdown=m15.get("score_breakdown",{}) or {}; raw=float(breakdown.get("Momentum",0) or 0)
+    m15=frames.get(exec_tf,{}); breakdown=m15.get("score_breakdown",{}) or {}; raw=float(breakdown.get("Momentum",0) or 0)
     families["momentum"]=_clip(20*raw/100.0,0,20)
 
     atr=(m15.get("indicators") or {}).get("atr_pct"); vol_ratio=(m15.get("indicators") or {}).get("volatility_regime_ratio"); volatility=15.0
@@ -50,7 +52,7 @@ def evaluate_setup_quality(result: Dict[str, Any], setup: Dict[str, Any] | None,
 
     regime=(m15.get("regime") or {})
     dq=(m15.get("data_quality") or {})
-    if dq.get("score",100) < 70: reasons.append(f"Qualité des données M15 faible: {dq.get("score",0):.0f}/100.")
+    if dq.get("score",100) < 70: reasons.append(f"Qualité des données du timeframe d'exécution faible: {dq.get("score",0):.0f}/100.")
     lq=liquidity_score(liquidity or {},direction,float(setup["entry"]),float(setup["tp2"]),float(setup["sl"]))
     families["liquidite"]=_clip(lq.get("score",0),0,15)
     if lq.get("reason"): reasons.append(lq["reason"])
@@ -61,7 +63,7 @@ def evaluate_setup_quality(result: Dict[str, Any], setup: Dict[str, Any] | None,
     if families["structure_price_action"]<8: hard.append("Structure/prix insuffisamment confirmés.")
     if families["volatilite"]<5: hard.append("Régime de volatilité défavorable.")
     if families["liquidite"]<6: hard.append("Zone de liquidité exploitable insuffisamment claire.")
-    if dq.get("score",100)<70: hard.append("Données M15 trop fragiles pour autoriser un setup.")
+    if dq.get("score",100)<70: hard.append("Données du timeframe d'exécution trop fragiles pour autoriser un setup.")
     if regime.get("volatility")=="EXPANSION" and score<82: hard.append("Expansion de volatilité sans confluence suffisante.")
     approved=not hard and score>=72
     grade="A+" if score>=90 else "A" if score>=82 else "B" if score>=72 else "REJETÉ"

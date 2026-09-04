@@ -11,9 +11,13 @@ def decide(result: Dict[str,Any], regime: Dict[str,Any], data_quality: Dict[str,
     if regime.get("volatility") == "EXPANSION": soft.append("Expansion de volatilité: attendre une confirmation et élargir l'invalidation si nécessaire.")
     if macro_risk in {"BLOQUÉ / CHOC MACRO","TRÈS ÉLEVÉ"}: hard.append(f"Risque macro {macro_risk}.")
     if direction not in {"ACHAT","VENTE"}: hard.append("Aucun scénario directionnel suffisamment structuré.")
-    usable=[result.get("timeframes",{}).get(tf,{}) for tf in ("D1","H4","H1","M15","M5")]
+    policy=result.get("policy",{}) or {}
+    required=list(dict.fromkeys([*policy.get("context",()), *policy.get("structure",()), policy.get("setup"), policy.get("trigger")]))
+    usable=[result.get("timeframes",{}).get(tf,{}) for tf in required if tf]
     avail=[x for x in usable if x.get("available")]
-    if len(avail)<4: hard.append("Couverture multi-timeframe incomplète.")
+    setup_tf=policy.get("setup", result.get("execution_timeframe","M15"))
+    if not result.get("timeframes",{}).get(setup_tf,{}).get("available"): hard.append("Timeframe d'exécution indisponible.")
+    if required and len(avail)<max(2, len(required)-1): hard.append("Couverture multi-timeframe incomplète.")
     status="REJETÉ" if hard else "CANDIDAT" if soft else "CANDIDAT FORT"
     return {"status":status,"hard_blocks":hard,"soft_warnings":soft,"scenario":direction,
             "thesis": "Scénario conditionnel, pas une prédiction: le trade n'est autorisé que si les barrières de risque et de qualité restent valides au moment de l'exécution.",

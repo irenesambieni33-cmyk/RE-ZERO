@@ -89,31 +89,75 @@ def analyze_timeframe(df:pd.DataFrame,timeframe:str)->Dict:
     quality=audit_ohlcv(work,timeframe)
     return {"timeframe":timeframe,"available":True,"data":work,"price":price,"direction":direction,"score":normalized,"confidence":confidence,"trend":trend,"structure":trend,"indicators":ind,"structure_data":structure,"zones":zones,"fib":fib,"confluence":conf,"reasons":reasons,"score_breakdown":breakdown,"orderflow":flow,"regime":regime,"data_quality":quality}
 
-def _same_direction(results,tfs,direction):
+def _same_direction(results, tfs, direction):
     usable=[results.get(tf,{}) for tf in tfs if results.get(tf,{}).get("available")]
-    return len(usable)>=2 and all(r.get("direction")==direction for r in usable)
+    return len(usable)>=1 and all(r.get("direction")==direction for r in usable)
 
-def analyze_multi_timeframe(frames:Dict[str,pd.DataFrame])->Dict:
+
+def analyze_multi_timeframe(frames:Dict[str,pd.DataFrame], execution_tf:str="M15")->Dict:
+    """Analyze the market around the selected execution timeframe.
+    Missing optional context never causes the selected execution timeframe to change.
+    """
+    from timeframe_policy import get_policy, required_data_timeframes
+    policy=get_policy(execution_tf)
+    tfs=list(dict.fromkeys([*required_data_timeframes(execution_tf), *TIMEFRAME_WEIGHTS.keys()]))
     results={}
-    for tf in TIMEFRAME_WEIGHTS:
-        try: results[tf]=analyze_timeframe(frames.get(tf,pd.DataFrame()),tf)
-        except Exception as exc: results[tf]={"timeframe":tf,"available":False,"direction":"NEUTRE","score":0.,"confidence":0.,"trend":"RANGE / NEUTRE","structure":"RANGE / NEUTRE","error":str(exc)}
-    usable=[r for r in results.values() if r.get("available")]; total_w=sum(TIMEFRAME_WEIGHTS[tf] for tf in results if results[tf].get("available")); global_score=sum(results[tf]["score"]*TIMEFRAME_WEIGHTS[tf] for tf in results if results[tf].get("available"))/total_w if total_w else 0.
-    major_bull=_same_direction(results,["D1","H4","H1"],"ACHAT"); major_bear=_same_direction(results,["D1","H4","H1"],"VENTE")
-    m15,m5=results.get("M15",{}),results.get("M5",{}); lower_complete=bool(m15.get("available") and m5.get("available")); lower_bull=lower_complete and m15.get("direction")==m5.get("direction")=="ACHAT"; lower_bear=lower_complete and m15.get("direction")==m5.get("direction")=="VENTE"
-    if major_bull and lower_bull and global_score>=40: decision="ACHAT"
-    elif major_bear and lower_bear and global_score<=-40: decision="VENTE"
-    elif abs(global_score)>=20: decision="ATTENDRE"
+    for tf in tfs:
+        try:
+            results[tf]=analyze_timeframe(frames.get(tf,pd.DataFrame()),tf)
+        except Exception as exc:
+            results[tf]={"timeframe":tf,"available":False,"direction":"NEUTRE","score":0.,"confidence":0.,"trend":"RANGE / NEUTRE","structure":"RANGE / NEUTRE","error":str(exc)}
+
+    usable=[r for r in results.values() if r.get("available")]
+    weights={tf:TIMEFRAME_WEIGHTS.get(tf,1.0) for tf in results}
+    total_w=sum(weights[tf] for tf in results if results[tf].get("available"))
+    global_score=sum(results[tf]["score"]*weights[tf] for tf in results if results[tf].get("available"))/total_w if total_w else 0.
+
+    context=[tf for tf in policy["context"] if tf in results and results[tf].get("available")]
+    structure_tfs=[tf for tf in policy["structure"] if tf in results and results[tf].get("available")]
+    setup_tf=policy["setup"]
+    trigger_tf=policy["trigger"]
+    setup_res=results.get(setup_tf,{})
+    trigger_res=results.get(trigger_tf,{})
+    context_dirs=[results[tf].get("direction") for tf in context if results[tf].get("direction") in {"ACHAT","VENTE"}]
+    ctx_bull=bool(context_dirs) and all(x=="ACHAT" for x in context_dirs)
+    ctx_bear=bool(context_dirs) and all(x=="VENTE" for x in context_dirs)
+    structure_dir=next((results[tf].get("direction") for tf in structure_tfs if results[tf].get("direction") in {"ACHAT","VENTE"}),None)
+    setup_dir=setup_res.get("direction")
+    trigger_dir=trigger_res.get("direction")
+
+    aligned_bull=ctx_bull and structure_dir==setup_dir=="ACHAT" and (trigger_dir in {None,"ACHAT"})
+    aligned_bear=ctx_bear and structure_dir==setup_dir=="VENTE" and (trigger_dir in {None,"VENTE"})
+    setup_available=bool(setup_res.get("available"))
+    if aligned_bull and setup_available and global_score>=25: decision="ACHAT"
+    elif aligned_bear and setup_available and global_score<=-25: decision="VENTE"
+    elif abs(global_score)>=18: decision="ATTENDRE"
     else: decision="AUCUN SETUP"
-    available=sum(bool(r.get("available")) for r in results.values()); alignment=sum(1 for tf in ["D1","H4","H1"] if results.get(tf,{}).get("available") and results[tf].get("direction") in {"ACHAT","VENTE"}); confirmation=sum(1 for tf in ["M15","M5"] if results.get(tf,{}).get("available") and results[tf].get("direction") in {"ACHAT","VENTE"})
+
+    required=[tf for tf in [setup_tf,*policy["structure"]] if tf in results]
+    available_required=sum(bool(results.get(tf,{}).get("available")) for tf in required)
     avg_conf=float(np.mean([r.get("confidence",0) for r in usable])) if usable else 0
-    directional_alignment=(alignment/3)*20+(confirmation/2)*15; data_factor=available/5
-    confidence=min(100.,abs(global_score)*0.55+directional_alignment+avg_conf*0.25)*(0.65+0.35*data_factor)
+    context_alignment=20 if (ctx_bull or ctx_bear) else 0
+    setup_alignment=25 if setup_dir in {"ACHAT","VENTE"} and setup_dir==structure_dir else 0
+    trigger_alignment=10 if trigger_dir==setup_dir else 0
+    data_factor=available_required/max(1,len(required))
+    confidence=min(100.,abs(global_score)*0.45+context_alignment+setup_alignment+trigger_alignment+avg_conf*0.20)*(0.60+0.40*data_factor)
     if decision=="ATTENDRE": confidence=min(confidence,70.)
     if decision=="AUCUN SETUP": confidence=min(confidence,50.)
-    if decision in {"ACHAT","VENTE"} and not lower_complete: decision="ATTENDRE"; confidence=min(confidence,65.)
-    lines=[f"{tf} {results[tf].get('direction','NEUTRE').lower() if results[tf].get('available') else 'indisponible'}" for tf in ["D1","H4","H1","M15","M5"]]
-    if decision in {"ACHAT","VENTE"}: explanation=f"{', '.join(lines)}. Alignement multi-timeframe favorable et confluence suffisante pour un setup candidat. Le score est une mesure de qualité, pas une probabilité garantie de gain."
-    elif decision=="ATTENDRE": explanation=f"{', '.join(lines)}. Un biais existe mais la confirmation/confluence est insuffisante. Le moteur refuse de forcer un trade."
-    else: explanation=f"{', '.join(lines)}. Les conditions ne forment pas une configuration suffisamment convergente. Aucun setup n'est forcé."
-    return {"timeframes":results,"score":global_score,"confidence":confidence,"decision":decision,"explanation":explanation,"available_count":available}
+    if decision in {"ACHAT","VENTE"} and not setup_available: decision="ATTENDRE"; confidence=min(confidence,65.)
+
+    display_tfs=list(dict.fromkeys([*policy["context"], *policy["structure"], setup_tf, trigger_tf]))
+    lines=[f"{tf} {results.get(tf,{}).get('direction','NEUTRE').lower() if results.get(tf,{}).get('available') else 'indisponible'}" for tf in display_tfs]
+    if decision in {"ACHAT","VENTE"}:
+        explanation=(f"Exécution {execution_tf}: {', '.join(lines)}. Contexte {', '.join(policy['context']) or '—'}, "
+                     f"structure {', '.join(policy['structure']) or '—'}, setup {setup_tf}, trigger {trigger_tf}. "
+                     "Alignement suffisant. Le score mesure la qualité/confluence, pas une probabilité garantie de gain.")
+    elif decision=="ATTENDRE":
+        explanation=(f"Exécution {execution_tf}: {', '.join(lines)}. Un biais existe mais la confirmation est insuffisante. "
+                     "RE-ZERO refuse de forcer un trade.")
+    else:
+        explanation=(f"Exécution {execution_tf}: {', '.join(lines)}. Les conditions ne forment pas une configuration suffisamment convergente. Aucun setup n'est forcé.")
+    return {"timeframes":results,"score":global_score,"confidence":confidence,"decision":decision,
+            "explanation":explanation,"available_count":len(usable),"execution_timeframe":execution_tf,
+            "policy":policy,"setup_timeframe":setup_tf,"trigger_timeframe":trigger_tf,
+            "context_timeframes":context,"structure_timeframes":structure_tfs}
