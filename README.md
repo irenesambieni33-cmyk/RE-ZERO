@@ -19,11 +19,11 @@ RE-ZERO adds a decision layer combining multi-timeframe trend, inferred buyer/se
 Markets: EUR/USD, XAU/USD, BTC/USD.
 Execution remains disabled: analyse → paper → demo → live.
 
-# RE-ZERO / Irenee V5.3
+# RE-ZERO / Irenee RE-ZERO Intelligence Core
 
 AI market analyst for EUR/USD + XAU/USD + BTC/USD, designed around selective setups and risk control.
 
-## V5.3 additions
+## RE-ZERO Intelligence Core additions
 - Setup Quality Engine (0-100, grades A+/A/B)
 - Safety Gate with hard risk blockers
 - Paper Trading ledger
@@ -55,5 +55,8 @@ Entrypoint: `app.py`
 `requirements.txt` must stay at repository root.
 
 
-## V5.5 EUR/USD + XAU/USD + BTC/USD Trade Manager
+## RE-ZERO EUR/USD + XAU/USD + BTC/USD Trade Manager
 Le projet est désormais centré exclusivement sur BTC/USD. Le moteur recherche des confluences de tendance, structure, liquidité, momentum, volatilité et R:R. Une seule position PAPER peut être active à la fois. Après validation de la prise de trade, le Trade Manager suit la position jusqu’à TP2 ou SL et n’autorise aucun nouveau signal d’entrée avant sa clôture. Le score de qualité n’est pas une probabilité de gain.
+
+## RE-ZERO Intelligence Core
+Cette version ajoute un détecteur de régime de marché, un audit de qualité des données, une décision hiérarchique qui traite la direction comme un scénario conditionnel et un moteur de validation statistique avec walk-forward, bootstrap, permutation et diagnostics par régime. Les métriques servent à détecter la fragilité et le surajustement, pas à garantir des gains.

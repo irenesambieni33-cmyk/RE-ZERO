@@ -1,4 +1,4 @@
-"""Lightweight historical validation for the V5 quality score.
+"""Lightweight historical validation for the RE-ZERO quality score.
 This is research/simulation only. It never sends broker orders.
 """
 from __future__ import annotations

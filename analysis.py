@@ -1,4 +1,4 @@
-"""V5 multi-timeframe confluence engine. Scores quality; it does not claim guaranteed win probability."""
+"""RE-ZERO multi-timeframe confluence engine. Scores quality; it does not claim guaranteed win probability."""
 from __future__ import annotations
 from typing import Dict, List
 import math, numpy as np, pandas as pd
@@ -8,6 +8,8 @@ from indicators import add_indicators
 from structure import analyze_structure
 from support_resistance import detect_zones
 from orderflow import buyer_seller_pressure
+from regime import detect_regime
+from data_quality import audit_ohlcv
 
 INDICATOR_KEYS=["ema20","ema50","sma200","hma20","tema20","dema20","ema_spread_pct","rsi7","rsi14","rsi21","stoch_rsi","macd","macd_signal","macd_hist","ppo","ppo_signal","ppo_hist","atr14","atr_pct","natr14","bb_upper","bb_lower","bb_mid","bb_width","bb_percent","std20_pct","realized_vol20","realized_vol60","adx14","di_plus","di_minus","dx14","aroon_up","aroon_down","aroon_osc","vortex_plus","vortex_minus","vortex_diff","stoch_k","stoch_d","roc12","roc24","mom10","cci20","williams_r","ultimate_osc","trix","fisher10","awesome_osc","dpo20","kst","kc_mid","kc_upper","kc_lower","donchian_high20","donchian_low20","donchian_mid20","donchian_pos","supertrend","supertrend_dir","psar","psar_dir","ichimoku_conversion","ichimoku_base","ichimoku_span_a","ichimoku_span_b","ichimoku_cloud_top","ichimoku_cloud_bottom","ichimoku_bias","cmf20","mfi14","obv","rel_volume20","vwap","volume_z20","eom14","force_index13","bull_power13","bear_power13","return1","log_return","range_pct","body_pct","upper_wick_pct","lower_wick_pct","zscore20","skew20","kurtosis20","drawdown","distance_high20_pct","distance_low20_pct","volatility_ratio"]
 
@@ -83,7 +85,9 @@ def analyze_timeframe(df:pd.DataFrame,timeframe:str)->Dict:
     direction="ACHAT" if normalized>=25 else "VENTE" if normalized<=-25 else "NEUTRE"
     completeness=min(1.,possible/16.0); confidence=min(100.,abs(normalized)*completeness)
     flow=buyer_seller_pressure(work)
-    return {"timeframe":timeframe,"available":True,"data":work,"price":price,"direction":direction,"score":normalized,"confidence":confidence,"trend":trend,"structure":trend,"indicators":ind,"structure_data":structure,"zones":zones,"fib":fib,"confluence":conf,"reasons":reasons,"score_breakdown":breakdown,"orderflow":flow}
+    regime=detect_regime(work)
+    quality=audit_ohlcv(work,timeframe)
+    return {"timeframe":timeframe,"available":True,"data":work,"price":price,"direction":direction,"score":normalized,"confidence":confidence,"trend":trend,"structure":trend,"indicators":ind,"structure_data":structure,"zones":zones,"fib":fib,"confluence":conf,"reasons":reasons,"score_breakdown":breakdown,"orderflow":flow,"regime":regime,"data_quality":quality}
 
 def _same_direction(results,tfs,direction):
     usable=[results.get(tf,{}) for tf in tfs if results.get(tf,{}).get("available")]

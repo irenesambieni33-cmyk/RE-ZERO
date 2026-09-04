@@ -15,6 +15,7 @@ from trade_manager import TradeManager
 from weekend_market import weekend_policy
 from macro_context import fetch_macro_events
 from browser_notifications import render_notification_control
+from validation_engine import validate_backtest
 from streamlit_autorefresh import st_autorefresh
 logging.basicConfig(level=logging.INFO)
 st.set_page_config(page_title=APP_NAME,page_icon="📊",layout="wide",initial_sidebar_state="expanded")
@@ -25,7 +26,7 @@ def main():
     st.sidebar.header("Paramètres"); instrument=st.sidebar.selectbox("Marché", list(INSTRUMENTS.keys()), index=2); capital=st.sidebar.number_input("Capital de référence",min_value=0.0,value=1000.0,step=100.0)
     st.sidebar.caption("Risque par trade : 1% • Risque ouvert max : 2% • R:R minimum : 1:2")
     st.sidebar.success("🔐 MODE SÉCURISÉ : ANALYSE")
-    st.sidebar.caption("RE-ZERO RE-ZERO : EUR/USD + XAU/USD + BTC/USD • Macro + NFP + Liquidity + Orderflow + Trade Manager")
+    st.sidebar.caption("RE-ZERO : EUR/USD + XAU/USD + BTC/USD • Macro + NFP + Liquidity + Orderflow + Trade Manager")
     st.sidebar.warning("Aucun ordre réel n'est autorisé dans cette version. Le mode week-end est réservé aux instruments réellement négociables 24/7, notamment BTC.")
     st.sidebar.subheader("🔔 Notifications téléphone")
     notif_enabled = st.sidebar.checkbox("Activer les notifications navigateur", value=False, help="Autorise les notifications du navigateur. La page RE-ZERO doit rester ouverte.")
@@ -54,8 +55,8 @@ def main():
         if st.button("🚀 DÉBUTER L'ANALYSE",type="primary",use_container_width=True): st.session_state["analysis_started"]=True; st.rerun()
         st.caption("Aucun signal n'est calculé avant l'appui sur le bouton."); return
     if st.button("🔄 Refaire l'analyse",use_container_width=True): load_market.clear(); st.rerun()
-    if st.sidebar.button("🧪 Backtest rapide M15"):
-        st.session_state["run_backtest"] = True
+    if st.sidebar.button("🧪 Validation statistique M15"):
+        st.session_state["run_stat_validation"] = True
     try:
         with st.spinner("Analyse D1 → H4 → H1 → M15 → M5 en cours…"): frames,warnings,used_proxy=load_market(instrument)
         if used_proxy: st.warning("XAU/USD : GC=F est utilisé comme proxy futures. Ce n'est pas le spot XAU/USD.")
@@ -65,15 +66,30 @@ def main():
         result=analyze_multi_timeframe(frames)
         macro_events=fetch_macro_events(days=7)
         crypto_snapshot = fetch_btc_snapshot() if instrument == "BTC/USD" else None
-        if st.session_state.pop("run_backtest", False):
-            with st.spinner("Backtest historique M15 en cours…"):
-                bt=backtest_timeframe(frames.get("M15"), "M15")
-            st.subheader("🧪 VALIDATION HISTORIQUE V5")
+        if st.session_state.pop("run_stat_validation", False):
+            with st.spinner("Validation historique séquentielle + robustesse statistique en cours…"):
+                bt=backtest_trade_plans(frames.get("M15"), "M15", horizon=16, max_samples=160, step=4)
+            st.subheader("🧪 VALIDATION STATISTIQUE RE-ZERO")
             if bt.get("ok"):
-                a,b,c,d=st.columns(4); a.metric("Trades simulés",bt["samples"]); b.metric("Win Rate",f"{bt["win_rate"]:.1f}%"); c.metric("Gagnants",bt["wins"]); d.metric("Perdants",bt["losses"])
-                st.dataframe({"Confiance":list(bt["buckets"].keys()),"Trades":[v["trades"] for v in bt["buckets"].values()],"Win Rate historique":[f"{v["win_rate"]:.1f}%" for v in bt["buckets"].values()]},use_container_width=True,hide_index=True)
-                st.caption(bt["note"])
-            else: st.warning(bt.get("reason","Backtest indisponible."))
+                rows=bt.get("rows",[])
+                vr=validate_backtest(rows, n_trials=1) if rows else {"verdict":"ÉCHANTILLON TROP PETIT","robustness_score":0,"walk_forward_positive_fold_rate":float("nan"),"permutation_pvalue":float("nan"),"note":"Aucun setup."}
+                a,b,c,d=st.columns(4)
+                a.metric("Trades", bt.get("trades",0))
+                b.metric("Expectancy", f'{bt.get("expectancy_r",0):+.2f}R')
+                c.metric("Robustesse", f'{vr.get("robustness_score",0):.0f}/100')
+                d.metric("Verdict", vr.get("verdict","—"))
+                e,f,g=st.columns(3)
+                e.metric("Win rate", f'{bt.get("win_rate",0):.1f}%')
+                wf=vr.get("walk_forward_positive_fold_rate")
+                f.metric("Walk-forward positif", "—" if wf!=wf else f'{wf*100:.0f}%')
+                pv=vr.get("permutation_pvalue")
+                g.metric("Permutation p", "—" if pv!=pv else f'{pv:.3f}')
+                st.caption(vr.get("note", ""))
+                if vr.get("regimes"):
+                    st.write("**Résultats par régime**")
+                    st.dataframe({k:{"trades":v.get("trades",0),"win_rate":round(v.get("win_rate",0),1),"expectancy_R":round(v.get("expectancy_r",0),3),"max_dd_R":round(v.get("max_drawdown_r",0),2)} for k,v in vr["regimes"].items()},use_container_width=True)
+            else:
+                st.warning(bt.get("reason","Validation indisponible."))
         price=next((float(frames[tf]["close"].iloc[-1]) for tf in ["M5","M15","H1","H4","D1"] if tf in frames and not frames[tf].empty),None)
         if price is None: st.error("Aucun prix exploitable n'a été trouvé."); return
         render_dashboard(instrument,price,result,capital,crypto_snapshot=crypto_snapshot, monitor=monitor, custom_window=(scan_start.strftime("%H:%M"), scan_end.strftime("%H:%M")), trade_manager=st.session_state["trade_manager"], macro_events=macro_events)

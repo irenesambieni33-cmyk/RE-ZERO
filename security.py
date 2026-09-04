@@ -1,4 +1,4 @@
-"""Safety gates for V5. No broker credentials or order execution are implemented."""
+"""Safety gates for RE-ZERO. No broker credentials or order execution are implemented."""
 from __future__ import annotations
 from typing import Dict
 from config import MAX_OPEN_RISK, MIN_RR, RISK_PER_TRADE
@@ -14,4 +14,4 @@ def validate_setup(setup: Dict, capital: float) -> Dict:
         "risque_ouvert_limite": MAX_OPEN_RISK <= 0.02,
         "execution_broker_desactivee": True,
     }
-    return {"approved": all(checks.values()), "checks": checks, "mode": "ANALYSE", "message": "Barrière de sécurité V5 : aucune exécution broker n'est autorisée dans cette version."}
+    return {"approved": all(checks.values()), "checks": checks, "mode": "ANALYSE", "message": "Barrière de sécurité RE-ZERO : aucune exécution broker n'est autorisée dans cette version."}

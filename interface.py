@@ -16,6 +16,7 @@ from liquidity import build_liquidity_map
 from trade_manager import TradeManager
 from macro_context import fetch_macro_events, macro_assessment
 from browser_notifications import notify_opportunity
+from decision_engine import decide
 
 def _fmt(v, digits=5):
     if v is None: return "—"
@@ -145,7 +146,7 @@ def render_chart(tf_result: Dict, liquidity=None):
 
 def render_dashboard(instrument: str, price: float, result: Dict, capital: float, crypto_snapshot=None, monitor: bool = False, custom_window=None, trade_manager: TradeManager | None = None, macro_events=None):
     st.markdown(f'<div class="hero"><h1>{APP_NAME}</h1><div class="muted">{APP_SUBTITLE}</div></div>',unsafe_allow_html=True)
-    c1,c2,c3,c4=st.columns(4); c1.metric("Instrument",instrument); c2.metric("Prix actuel",_fmt(price)); c3.metric("Score",f'{result["score"]:+.1f}'); c4.metric("Confiance",f'{result["confidence"]:.0f}%')
+    c1,c2,c3,c4=st.columns(4); c1.metric("Instrument",instrument); c2.metric("Prix actuel",_fmt(price)); c3.metric("Score",f'{result["score"]:+.1f}'); c4.metric("Qualité du scénario",f'{result["confidence"]:.0f}/100')
     if crypto_snapshot and crypto_snapshot.get("ok"):
         st.subheader("₿ MICROSTRUCTURE BTC")
         a,b,c,d,e=st.columns(5); a.metric("Variation 24h",f'{crypto_snapshot["change_pct"]:+.2f}%'); b.metric("High 24h",_fmt(crypto_snapshot["high_24h"])); c.metric("Low 24h",_fmt(crypto_snapshot["low_24h"])); d.metric("Volume BTC",f'{crypto_snapshot["volume_btc"]:,.0f}'); e.metric("Order-book imbalance",f'{crypto_snapshot["orderbook_imbalance"]:+.2%}')
@@ -170,7 +171,7 @@ def render_dashboard(instrument: str, price: float, result: Dict, capital: float
         with col:
             st.markdown(f"**{tf}**")
             if not r.get("available"): st.warning("Indisponible"); continue
-            st.write(f"Direction : **{r['direction']}**"); st.write(f"Score : **{r['score']:+.1f}**"); st.write(f"Confiance : **{r['confidence']:.0f}%**"); st.write(f"Tendance : **{r['trend']}**")
+            st.write(f"Direction : **{r['direction']}**"); st.write(f"Score : **{r['score']:+.1f}**"); st.write(f"Qualité : **{r['confidence']:.0f}/100**"); st.write(f"Tendance : **{r['trend']}**")
             sd=r.get("structure_data",{}); st.caption(f"Structure : {r['structure']} • HH {sd.get('hh',0)} • HL {sd.get('hl',0)} • LH {sd.get('lh',0)} • LL {sd.get('ll',0)}")
             ind=r.get("indicators",{}); st.caption(f"RSI {_fmt(ind.get('rsi14'),1)} • ADX {_fmt(ind.get('adx14'),1)} • MACD {_fmt(ind.get('macd_hist'),5)} • CCI {_fmt(ind.get('cci20'),1)} • MFI {_fmt(ind.get('mfi14'),1)}")
     st.subheader("⚖️ PRESSION ACHETEURS / VENDEURS")
@@ -179,12 +180,12 @@ def render_dashboard(instrument: str, price: float, result: Dict, capital: float
         fa,fb,fc=st.columns(3); fa.metric("Acheteurs",f"{flow.get('buyers',0):.1f}%"); fb.metric("Vendeurs",f"{flow.get('sellers',0):.1f}%"); fc.metric("Biais",flow.get("bias","ÉQUILIBRE"))
         st.progress(int(max(0,min(100,flow.get("buyers",50)))))
         st.caption(flow.get("note",""))
-    with st.expander("🧠 Détail du score V5", expanded=False):
+    with st.expander("🧠 Détail de la qualité RE-ZERO", expanded=False):
         st.caption("Les familles sont volontairement pondérées pour limiter le double comptage d'indicateurs corrélés.")
         for tf in TIMEFRAMES:
             r=result["timeframes"].get(tf,{})
             if r.get("available"):
-                st.write(f"**{tf}** — score {r.get("score",0):+.1f} / confiance {r.get("confidence",0):.0f}%")
+                st.write(f"**{tf}** — score {r.get("score",0):+.1f} / qualité {r.get("confidence",0):.0f}/100")
                 st.json(r.get("score_breakdown",{}), expanded=False)
     trade_manager = trade_manager or TradeManager()
     m15=result["timeframes"].get("M15",{}); setup=None; setup_source="M15"
@@ -201,7 +202,17 @@ def render_dashboard(instrument: str, price: float, result: Dict, capital: float
     active_trade = trade_manager.active
     # The M15 setup must use the latest M15 price, not the latest lower-timeframe price (M5).
     setup_price = m15.get("price") if m15.get("available") else price
-    if active_trade is None and result["decision"] in {"ACHAT","VENTE"} and m15.get("available") and macro.get("risk") not in {"BLOQUÉ / CHOC MACRO","TRÈS ÉLEVÉ"}:
+    decision_guard = decide(result, rg, dq, macro.get("risk", "NORMAL"))
+    st.subheader("🎯 MOTEUR DE DÉCISION")
+    da,db,dc=st.columns(3)
+    da.metric("Scénario", decision_guard.get("scenario", "NEUTRE"))
+    db.metric("Statut", decision_guard.get("status", "REJETÉ"))
+    dc.metric("Qualité données", f"{dq.get("score",0):.0f}/100")
+    if decision_guard.get("hard_blocks"):
+        for reason in decision_guard["hard_blocks"]: st.warning("⛔ "+reason)
+    if decision_guard.get("soft_warnings"):
+        for reason in decision_guard["soft_warnings"]: st.caption("⚠️ "+reason)
+    if active_trade is None and decision_guard.get("status") in {"CANDIDAT","CANDIDAT FORT"} and result["decision"] in {"ACHAT","VENTE"} and m15.get("available") and macro.get("risk") not in {"BLOQUÉ / CHOC MACRO","TRÈS ÉLEVÉ"}:
         setup=build_setup(setup_price,m15.get("indicators",{}).get("atr14"),m15.get("structure_data",{}),result["decision"],m15.get("zones",{}))
         if not setup.get("valid"): setup=None
     st.subheader("GRAPHIQUE")
@@ -241,6 +252,17 @@ def render_dashboard(instrument: str, price: float, result: Dict, capital: float
         pb.metric("Percentile volatilité", _fmt(profile.get("percentile"), 0) + "%")
         pc.metric("Volume Z", _fmt(profile.get("volume_z"), 2))
     st.caption(timing.get("note", ""))
+
+    st.subheader("🧠 RÉGIME DE MARCHÉ & QUALITÉ DES DONNÉES")
+    rg=m15.get("regime",{}) or {}; dq=m15.get("data_quality",{}) or {}
+    ra,rb,rc,rd=st.columns(4)
+    ra.metric("Régime", rg.get("base","INCONNU"))
+    rb.metric("Direction régime", rg.get("direction","—"))
+    rc.metric("Volatilité", rg.get("volatility","—"))
+    rd.metric("Qualité données", f'{dq.get("score",0):.0f}/100')
+    st.caption(rg.get("note", ""))
+    if dq.get("issues"):
+        st.caption("Audit données : " + " • ".join(dq["issues"][:4]))
 
     st.subheader("🔒 POSITION EN COURS")
     if active_trade is not None:

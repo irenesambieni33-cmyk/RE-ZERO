@@ -50,7 +50,7 @@ def backtest_trade_plans(df: pd.DataFrame, timeframe: str = "M15", horizon: int 
             if hit_tp: exit_price=tp2; outcome="WIN"; r_mult=abs(tp2-entry)/abs(entry-sl); break
         cost_r=((spread+slip)+entry*fee_bps/10000.0)/abs(entry-sl); r_mult-=cost_r
         equity+=r_mult; peak=max(peak,equity); max_dd=max(max_dd,peak-equity)
-        outcomes.append({"timestamp":str(future.index[0]),"direction":direction,"quality":float(r.get("confidence",0)),"outcome":outcome,"R":r_mult})
+        outcomes.append({"timestamp":str(future.index[0]),"direction":direction,"quality":float(r.get("confidence",0)),"outcome":outcome,"R":r_mult,"regime":(r.get("regime") or {}).get("label","INCONNU"),"data_quality":(r.get("data_quality") or {}).get("score",0)})
     if not outcomes:
         return {"ok":True,"trades":0,"wins":0,"losses":0,"win_rate":0.0,"net_r":0.0,"profit_factor":0.0,"max_drawdown_r":0.0,"expectancy_r":0.0,"rows":[],"note":"Aucun setup suffisamment sélectif n'a été validé sur l'échantillon."}
     rs=[x["R"] for x in outcomes]; wins=sum(x>0 for x in rs); losses=sum(x<=0 for x in rs); gp=sum(x for x in rs if x>0); gl=abs(sum(x for x in rs if x<0))

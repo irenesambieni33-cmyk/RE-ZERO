@@ -1,4 +1,4 @@
-"""Central configuration for Forex AI Analyst V5."""
+"""Central configuration for RE-ZERO RE-ZERO."""
 from dataclasses import dataclass
 APP_NAME = "RE-ZERO"
 APP_SUBTITLE = "AI Market Trader Analyst • EUR/USD • XAU/USD • BTC/USD • Liquidité • Momentum • Volatilité • Trade Manager"

@@ -48,6 +48,9 @@ def evaluate_setup_quality(result: Dict[str, Any], setup: Dict[str, Any] | None,
 
     rr=float(setup.get("rr1",0) or 0); families["geometrie_RR"]=_clip(10 if rr>=2.5 else 7 if rr>=2 else 0,0,10)
 
+    regime=(m15.get("regime") or {})
+    dq=(m15.get("data_quality") or {})
+    if dq.get("score",100) < 70: reasons.append(f"Qualité des données M15 faible: {dq.get("score",0):.0f}/100.")
     lq=liquidity_score(liquidity or {},direction,float(setup["entry"]),float(setup["tp2"]),float(setup["sl"]))
     families["liquidite"]=_clip(lq.get("score",0),0,15)
     if lq.get("reason"): reasons.append(lq["reason"])
@@ -58,8 +61,10 @@ def evaluate_setup_quality(result: Dict[str, Any], setup: Dict[str, Any] | None,
     if families["structure_price_action"]<8: hard.append("Structure/prix insuffisamment confirmés.")
     if families["volatilite"]<5: hard.append("Régime de volatilité défavorable.")
     if families["liquidite"]<6: hard.append("Zone de liquidité exploitable insuffisamment claire.")
+    if dq.get("score",100)<70: hard.append("Données M15 trop fragiles pour autoriser un setup.")
+    if regime.get("volatility")=="EXPANSION" and score<82: hard.append("Expansion de volatilité sans confluence suffisante.")
     approved=not hard and score>=72
     grade="A+" if score>=90 else "A" if score>=82 else "B" if score>=72 else "REJETÉ"
     if not approved: grade="REJETÉ"; reasons.extend(hard or ["Score de qualité inférieur au seuil."])
     else: reasons.append("Confluence tendance + structure + momentum + volatilité + liquidité + R:R validée.")
-    return {"approved":approved,"score":round(score,1),"grade":grade,"families":{k:round(v,1) for k,v in families.items()},"reasons":reasons,"note":"Score de qualité sur 100, pas une probabilité mathématique de gain."}
+    return {"approved":approved,"score":round(score,1),"grade":grade,"families":{k:round(v,1) for k,v in families.items()},"reasons":reasons,"regime": regime, "data_quality": dq, "note":"Score de qualité sur 100, pas une probabilité mathématique de gain. Le régime et la qualité des données sont des garde-fous, pas des prédictions."}
