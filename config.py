@@ -1,10 +1,9 @@
 """Central configuration for RE-ZERO."""
 from dataclasses import dataclass
-from timeframe_policy import EXECUTION_TIMEFRAMES, DATA_TIMEFRAMES
 APP_NAME = "RE-ZERO"
 APP_SUBTITLE = "AI Market Trader Analyst • Liquidité • Structure • Macro • Momentum • Risque"
-TIMEFRAMES = DATA_TIMEFRAMES
-EXECUTION_TIMEFRAMES = EXECUTION_TIMEFRAMES
+EXECUTION_TIMEFRAMES = ("M5", "M15", "M30", "H1", "H4", "D1")
+TIMEFRAMES = EXECUTION_TIMEFRAMES
 TIMEFRAME_WEIGHTS = {"D1":3,"H4":3,"H1":2,"M30":1.5,"M15":1,"M5":1}
 INSTRUMENTS = {
     "EUR/USD":{"ticker":"EURUSD=X","label":"EUR/USD","market":"FOREX","proxy":None},
