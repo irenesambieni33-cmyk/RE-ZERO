@@ -14,6 +14,7 @@ from alerts import build_alert, send_telegram
 from trade_manager import TradeManager
 from weekend_market import weekend_policy
 from macro_context import fetch_macro_events
+from browser_notifications import render_notification_control
 from streamlit_autorefresh import st_autorefresh
 logging.basicConfig(level=logging.INFO)
 st.set_page_config(page_title=APP_NAME,page_icon="📊",layout="wide",initial_sidebar_state="expanded")
@@ -26,6 +27,10 @@ def main():
     st.sidebar.success("🔐 MODE SÉCURISÉ : ANALYSE")
     st.sidebar.caption("RE-ZERO RE-ZERO : EUR/USD + XAU/USD + BTC/USD • Macro + NFP + Liquidity + Orderflow + Trade Manager")
     st.sidebar.warning("Aucun ordre réel n'est autorisé dans cette version. Le mode week-end est réservé aux instruments réellement négociables 24/7, notamment BTC.")
+    st.sidebar.subheader("🔔 Notifications téléphone")
+    notif_enabled = st.sidebar.checkbox("Activer les notifications navigateur", value=False, help="Autorise les notifications du navigateur. La page RE-ZERO doit rester ouverte.")
+    if notif_enabled:
+        render_notification_control(True)
     st.sidebar.subheader("⏱️ Surveillance intelligente")
     monitor = st.sidebar.checkbox("Activer la surveillance", value=False)
     refresh_seconds = st.sidebar.select_slider("Fréquence de scan", options=[30,60,120,300], value=60, format_func=lambda x: f"{x}s")

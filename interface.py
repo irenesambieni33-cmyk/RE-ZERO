@@ -15,6 +15,7 @@ from performance import backtest_trade_plans
 from liquidity import build_liquidity_map
 from trade_manager import TradeManager
 from macro_context import fetch_macro_events, macro_assessment
+from browser_notifications import notify_opportunity
 
 def _fmt(v, digits=5):
     if v is None: return "—"
@@ -304,6 +305,8 @@ def render_dashboard(instrument: str, price: float, result: Dict, capital: float
     if failed: st.caption("Blocages : " + ", ".join(failed))
     else: st.caption("Toutes les barrières critiques sont satisfaites. Aucun ordre broker n'est envoyé par cette version.")
     alert = build_alert(instrument, result, quality, gate, timing, setup) if active_trade is None else {"active":False,"message":"Trade déjà actif : aucune nouvelle alerte d’entrée."}
+    notify_key = f"{instrument}|{alert.get('direction')}|{alert.get('quality')}|{(alert.get('setup') or {}).get('entry')}|{(alert.get('setup') or {}).get('sl')}|{(alert.get('setup') or {}).get('tp2')}"
+    notify_opportunity(alert, notify_key)
     st.subheader("🚨 DÉTECTION D'OPPORTUNITÉ")
     if alert["active"]:
         st.success(alert["message"])

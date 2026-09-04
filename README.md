@@ -1,3 +1,15 @@
+# RE-ZERO — Notifications téléphone sans Telegram
+
+Cette version ajoute les notifications navigateur.
+
+1. Dans la barre latérale, active « Notifications navigateur ».
+2. Autorise les notifications dans le navigateur du téléphone.
+3. Active « Surveillance intelligente ».
+4. RE-ZERO déclenche une notification lorsqu’une opportunité passe les filtres existants.
+5. La même opportunité n’est pas renotifiée à chaque rafraîchissement.
+
+Important : les notifications navigateur fonctionnent lorsque la page RE-ZERO reste ouverte. Pour des notifications push même lorsque l’application est complètement fermée, il faudra ensuite mettre en place un vrai service Web Push/PWA avec un service worker.
+
 # RE-ZERO RE-ZERO — Intelligent Macro + Orderflow Engine
 
 RE-ZERO adds a decision layer combining multi-timeframe trend, inferred buyer/seller pressure, liquidity, momentum, volatility, Fibonacci and macro-event risk. It monitors public economic calendars such as the U.S. BLS Employment Situation (NFP) and Federal Reserve dates.
