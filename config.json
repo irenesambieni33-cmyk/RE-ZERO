@@ -8,5 +8,6 @@
   "indicator_parameters": {"sma": [20,50,100,200], "ema": [9,21,50,200], "rsi": 14, "macd": [12,26,9], "stochastic": [14,3], "atr": 14, "bollinger": [20,2], "volume_ma": 20},
   "mtf_hierarchy": ["D1","H4","H1","M30","M15","M5"],
   "risk": {"minimum_rr": 2.0, "max_trades_day": 3, "default_risk_pct": 1.0},
-  "safety": {"closed_candle_confirmation": true, "block_on_stale_data": true, "block_without_execution_quality": true}
+  "safety": {"closed_candle_confirmation": true, "block_on_stale_data": true, "block_without_execution_quality": true},
+  "macro": {"blackout_windows": []}
 }

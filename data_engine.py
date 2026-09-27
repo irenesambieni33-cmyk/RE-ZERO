@@ -5,7 +5,9 @@ from .freshness import FreshnessManager
 from .market_clock import MarketClock
 from core.models import DataResult
 
-INTERVAL = {"M15":"15m", "M30":"30m", "H1":"60m", "H4":"1h", "D1":"1d"}
+# yfinance n'a pas d'intervalle "4h" natif : H4 est reconstruit à partir de bougies H1 (voir _resample_h4).
+INTERVAL = {"M15":"15m", "M30":"30m", "H1":"60m", "H4":"60m", "D1":"1d"}
+RESAMPLE_RULE = {"H4": "4h"}
 
 class DataEngine:
     def __init__(self):
@@ -14,10 +16,23 @@ class DataEngine:
         self.quality = DataQuality()
         self.freshness = FreshnessManager()
 
+    @staticmethod
+    def _resample(df, rule):
+        if df is None or df.empty:
+            return df
+        agg = {"Open": "first", "High": "max", "Low": "min", "Close": "last"}
+        if "Volume" in df.columns:
+            agg["Volume"] = "sum"
+        out = df.resample(rule).agg(agg)
+        return out.dropna(subset=["Open", "High", "Low", "Close"])
+
     def fetch(self, asset, ticker, timeframe, is_proxy=False, proxy_instrument=None):
         received = MarketClock.now()
         try:
             df = self.provider.fetch(ticker, interval=INTERVAL.get(timeframe, "15m"))
+            rule = RESAMPLE_RULE.get(timeframe)
+            if rule:
+                df = self._resample(df, rule)
             ok, errors = self.validator.validate(df)
             quality = self.quality.score(df, errors)
             status = "VALID" if ok and quality >= 0.9 else "DEGRADED" if ok else "CORRUPTED"
