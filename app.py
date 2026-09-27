@@ -29,6 +29,30 @@ if st.button("🔎 START ANALYSIS", use_container_width=True):
     st.error("⛔ PAS DE TRADE" if decision == "PAS DE TRADE" else f"🟡 {decision}")
     st.json(r["decision"])
 
+    st.subheader("🎯 SETUP")
+    risk = r.get("risk") or {}
+    if risk.get("status") == "VALID":
+        direction = risk.get("direction", "?")
+        icon = "🟢" if direction == "LONG" else "🔴" if direction == "SHORT" else "⚪"
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric(f"{icon} DIRECTION", direction)
+        c2.metric("ENTRY", f"{risk['entry']:.5f}")
+        c3.metric("STOP LOSS", f"{risk['stop']:.5f}")
+        c4.metric("TAKE PROFIT", f"{risk['target']:.5f}")
+        st.caption(f"RR = {risk['rr']} (minimum requis : {risk['minimum_rr']}) • {risk.get('basis', '')}")
+        if decision == "PAS DE TRADE":
+            st.warning(
+                "Setup calculé mais la décision reste PAS DE TRADE : un ou plusieurs autres "
+                "hard gates ont échoué (voir DECISION ci-dessus). Ce setup n'est PAS une "
+                "recommandation à exécuter tant que la décision globale n'est pas SURVEILLER."
+            )
+    elif risk.get("status") == "WAITING_FOR_LEVELS":
+        st.info("Pas de setup directionnel : régime non tranché (RANGE/UNKNOWN) ou structure insuffisante pour dériver un stop réel.")
+    elif risk.get("status") == "INVALID_STOP":
+        st.warning("Setup écarté : le stop dérivé de la structure est du mauvais côté du prix actuel (donnée incohérente).")
+    else:
+        st.info("Pas de setup disponible pour cette analyse.")
+
     intel = r.get("intelligence", {})
     if intel.get("mtf"):
         st.subheader("MTF (confluence multi-timeframe)")
